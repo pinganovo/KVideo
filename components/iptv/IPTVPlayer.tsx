@@ -36,7 +36,7 @@ interface IPTVPlayerProps {
 }
 
 function getProxiedUrl(url: string, ua?: string, referer?: string): string {
-  return url;
+  return "https://blue-king-c363.yye80806.workers.dev/?url=" + encodeURIComponent(url);
 }
 function formatTime(seconds: number): string {
   if (!isFinite(seconds)) return "00:00";
