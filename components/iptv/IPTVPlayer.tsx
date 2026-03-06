@@ -38,6 +38,25 @@ interface IPTVPlayerProps {
 function getProxiedUrl(url: string, ua?: string, referer?: string): string {
   return url;
 }
+function formatTime(seconds: number): string {
+  if (!isFinite(seconds)) return "00:00";
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  if (hours > 0) {
+    return (
+      hours +
+      ":" +
+      minutes.toString().padStart(2, "0") +
+      ":" +
+      secs.toString().padStart(2, "0")
+    );
+  }
+
+  return minutes + ":" + secs.toString().padStart(2, "0");
+}
 
 export function IPTVPlayer({ channel, onClose, channels, onChannelChange, channelsBySource, sources }: IPTVPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
