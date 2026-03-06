@@ -36,26 +36,20 @@ interface IPTVPlayerProps {
 }
 
 function getProxiedUrl(url: string, ua?: string, referer?: string): string {
-  return "https://blue-king-c363.yye80806.workers.dev/?url=" + encodeURIComponent(url);
+  let proxyUrl = `/api/iptv/stream?`;
+  if (ua) proxyUrl += `ua=${encodeURIComponent(ua)}&`;
+  if (referer) proxyUrl += `referer=${encodeURIComponent(referer)}&`;
+  proxyUrl += `url=${encodeURIComponent(url)}`;
+  return proxyUrl;
 }
+
 function formatTime(seconds: number): string {
-  if (!isFinite(seconds)) return "00:00";
-
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return (
-      hours +
-      ":" +
-      minutes.toString().padStart(2, "0") +
-      ":" +
-      secs.toString().padStart(2, "0")
-    );
-  }
-
-  return minutes + ":" + secs.toString().padStart(2, "0");
+  if (!isFinite(seconds) || seconds < 0) return '0:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 export function IPTVPlayer({ channel, onClose, channels, onChannelChange, channelsBySource, sources }: IPTVPlayerProps) {
