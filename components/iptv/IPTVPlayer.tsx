@@ -36,14 +36,6 @@ interface IPTVPlayerProps {
 }
 
 function getProxiedUrl(url: string, ua?: string, referer?: string): string {
-  let proxyUrl = `/api/iptv/stream?`;
-  if (ua) proxyUrl += `ua=${encodeURIComponent(ua)}&`;
-  if (referer) proxyUrl += `referer=${encodeURIComponent(referer)}&`;
-  proxyUrl += `url=${encodeURIComponent(url)}`;
-  return proxyUrl;
-}
-
-function getProxiedUrl(url: string, ua?: string, referer?: string): string {
   return url;
 }
 
