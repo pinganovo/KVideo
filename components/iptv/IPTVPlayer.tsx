@@ -14,24 +14,23 @@ import type { M3UChannel } from '@/lib/utils/m3u-parser';
 import type { IPTVSource } from '@/lib/store/iptv-store';
 
 const HLS_LIVE_CONFIG: Partial<Hls['config']> = {
+const HLS_LIVE_CONFIG: Partial<Hls['config']> = {
   enableWorker: true,
 
   lowLatencyMode: false,
 
-  maxBufferLength: 60,
+  maxBufferLength: 90,
   maxMaxBufferLength: 120,
-  backBufferLength: 90,
+  backBufferLength: 60,
 
   liveSyncDurationCount: 3,
 
   manifestLoadingTimeOut: 20000,
-  manifestLoadingMaxRetry: 5,
-
-  levelLoadingTimeOut: 20000,
   fragLoadingTimeOut: 30000,
 
-  fragLoadingMaxRetry: 5,
-  levelLoadingMaxRetry: 5
+  manifestLoadingMaxRetry: 5,
+  fragLoadingMaxRetry: 6,
+  levelLoadingMaxRetry: 6,
 };
 const LOADING_TIMEOUT_MS = 30000;
 const MAX_VISIBLE_ROUTES = 3;
@@ -311,20 +310,29 @@ export function IPTVPlayer({ channel, onClose, channels, onChannelChange, channe
         video.play().catch(() => {});
       });
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            tryWithProxy();
-          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-  hls.recoverMediaError();
-} else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-  hls.startLoad();
-}
-          } else {
-            tryWithProxy();
-          }
-        }
-      });
+  if (!data.fatal) return;
+
+  switch (data.type) {
+
+    case Hls.ErrorTypes.NETWORK_ERROR:
+      console.warn("HLS network error, retrying...");
+      hls.startLoad();
+      break;
+
+    case Hls.ErrorTypes.MEDIA_ERROR:
+      console.warn("HLS media error, recovering...");
+      hls.recoverMediaError();
+      break;
+
+    default:
+      console.warn("HLS fatal error, switching proxy...");
+      hls.destroy();
+      hlsRef.current = null;
+      tryWithProxy();
+      break;
+
+  }
+});
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS (Safari/iOS)
       video.src = url;
