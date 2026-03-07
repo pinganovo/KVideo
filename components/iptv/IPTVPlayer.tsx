@@ -15,14 +15,24 @@ import type { IPTVSource } from '@/lib/store/iptv-store';
 
 const HLS_LIVE_CONFIG: Partial<Hls['config']> = {
   enableWorker: true,
-  lowLatencyMode: true,
-  liveDurationInfinity: true,
-  manifestLoadingTimeOut: 10000,
-  manifestLoadingMaxRetry: 3,
-  levelLoadingTimeOut: 10000,
-  fragLoadingTimeOut: 20000,
-};
 
+  lowLatencyMode: false,
+
+  maxBufferLength: 60,
+  maxMaxBufferLength: 120,
+  backBufferLength: 90,
+
+  liveSyncDurationCount: 3,
+
+  manifestLoadingTimeOut: 20000,
+  manifestLoadingMaxRetry: 5,
+
+  levelLoadingTimeOut: 20000,
+  fragLoadingTimeOut: 30000,
+
+  fragLoadingMaxRetry: 5,
+  levelLoadingMaxRetry: 5
+};
 const LOADING_TIMEOUT_MS = 30000;
 const MAX_VISIBLE_ROUTES = 3;
 
@@ -227,6 +237,7 @@ export function IPTVPlayer({ channel, onClose, channels, onChannelChange, channe
 
     if (Hls.isSupported()) {
       const hls = new Hls(HLS_LIVE_CONFIG);
+      hls.startLevel = -1;
       hlsRef.current = hls;
 
       let triedProxy = false;
@@ -304,7 +315,11 @@ export function IPTVPlayer({ channel, onClose, channels, onChannelChange, channe
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
             tryWithProxy();
           } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            hls.recoverMediaError();
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+  hls.recoverMediaError();
+} else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+  hls.startLoad();
+}
           } else {
             tryWithProxy();
           }
