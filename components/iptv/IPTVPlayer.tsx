@@ -180,190 +180,119 @@ export function IPTVPlayer({ channel, onClose, channels, onChannelChange, channe
   }, []);
 
   const loadChannel = useCallback((url: string) => {
-    const video = videoRef.current;
-    if (!video) return;
 
-    setError(null);
-    setIsLoading(true);
-    setIsLive(true);
-    setCurrentTime(0);
-    setDuration(0);
+  const video = videoRef.current;
+  if (!video) return;
 
-    // Clean up previous
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (loadingTimeoutRef.current) {
-      clearTimeout(loadingTimeoutRef.current);
-      loadingTimeoutRef.current = undefined;
-    }
-    video.removeAttribute('src');
-    video.load();
+  setError(null);
+  setIsLoading(true);
 
-    const proxiedUrl = getProxiedUrl(url, channel.httpUserAgent, channel.httpReferrer);
+  if (hlsRef.current) {
+    hlsRef.current.destroy();
+    hlsRef.current = null;
+  }
 
-    // Global loading timeout
-    let loadingResolved = false;
-    const markLoaded = () => {
-      if (loadingResolved) return;
-      loadingResolved = true;
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = undefined;
-      }
-      setIsLoading(false);
-    };
-    const markError = (msg: string) => {
-      if (loadingResolved) return;
-      loadingResolved = true;
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = undefined;
-      }
-      setIsLoading(false);
-      setError(msg);
-    };
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
 
-    loadingTimeoutRef.current = setTimeout(() => {
-      markError('加载超时，请尝试其他线路或频道');
-    }, LOADING_TIMEOUT_MS);
+  if (Hls.isSupported()) {
 
-    if (Hls.isSupported()) {
-      const hls = new Hls(HLS_LIVE_CONFIG);
-      hls.startLevel = -1;
-      hlsRef.current = hls;
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
 
-      let triedProxy = false;
-      let triedDirect = false;
+      maxBufferLength: 120,
+      maxMaxBufferLength: 180,
+      backBufferLength: 90,
 
-      const tryDirectVideo = (directUrl: string) => {
-        if (triedDirect) {
-          markError('播放错误，请尝试其他线路或频道');
-          return;
-        }
-        triedDirect = true;
-        const vid = videoRef.current;
-        if (!vid) return;
-        vid.src = directUrl;
-        vid.addEventListener('canplay', () => {
-          markLoaded();
-          vid.play().catch(() => {});
-        }, { once: true });
-        vid.addEventListener('error', () => {
-          if (directUrl === url) {
-            // Try proxied direct video
-            const vid2 = videoRef.current;
-            if (!vid2) return;
-            vid2.src = proxiedUrl;
-            vid2.addEventListener('canplay', () => {
-              markLoaded();
-              vid2.play().catch(() => {});
-            }, { once: true });
-            vid2.addEventListener('error', () => {
-              markError('播放错误，请尝试其他线路或频道');
-            }, { once: true });
-          } else {
-            markError('播放错误，请尝试其他线路或频道');
-          }
-        }, { once: true });
-      };
+      maxBufferHole: 10,
+      maxFragLookUpTolerance: 1,
 
-      const tryWithProxy = () => {
-        if (triedProxy) {
-          tryDirectVideo(url);
-          return;
-        }
-        triedProxy = true;
-        hls.destroy();
-        const hlsProxy = new Hls(HLS_LIVE_CONFIG);
-        hlsRef.current = hlsProxy;
-        hlsProxy.loadSource(proxiedUrl);
-        hlsProxy.attachMedia(video);
-        hlsProxy.on(Hls.Events.MANIFEST_PARSED, () => {
-          markLoaded();
-          video.play().catch(() => {});
-        });
-        hlsProxy.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
-            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              hlsProxy.recoverMediaError();
-            } else {
-              hlsProxy.destroy();
-              hlsRef.current = null;
-              tryDirectVideo(url);
-            }
-          }
-        });
-      };
+      highBufferWatchdogPeriod: 2,
 
-      // First try direct URL with HLS.js
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        markLoaded();
+      manifestLoadingTimeOut: 20000,
+      fragLoadingTimeOut: 30000,
+
+      manifestLoadingMaxRetry: 6,
+      fragLoadingMaxRetry: 8,
+      levelLoadingMaxRetry: 6,
+
+      capLevelToPlayerSize: true
+    });
+
+    hls.startLevel = -1;
+
+    hlsRef.current = hls;
+
+    hls.loadSource(url);
+    hls.attachMedia(video);
+
+    // 解析 m3u8
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+
+      video.pause();
+
+      setTimeout(() => {
+        setIsLoading(false);
         video.play().catch(() => {});
-      });
-      hls.on(Hls.Events.ERROR, (_, data) => {
-  if (!data.fatal) return;
+      }, 1200);
 
-  switch (data.type) {
+    });
 
-    case Hls.ErrorTypes.NETWORK_ERROR:
-      console.warn("HLS network error, retrying...");
-      hls.startLoad();
-      break;
+    // ts加载完成
+    hls.on(Hls.Events.FRAG_LOADED, () => {
 
-    case Hls.ErrorTypes.MEDIA_ERROR:
-      console.warn("HLS media error, recovering...");
-      hls.recoverMediaError();
-      break;
+      if (!video.buffered.length) return;
 
-    default:
-      console.warn("HLS fatal error, switching proxy...");
-      hls.destroy();
-      hlsRef.current = null;
-      tryWithProxy();
-      break;
+      const bufferEnd = video.buffered.end(video.buffered.length - 1);
+      const diff = bufferEnd - video.currentTime;
+
+      if (diff < 1) {
+        video.currentTime += 0.1;
+      }
+
+    });
+
+    // 错误恢复
+    hls.on(Hls.Events.ERROR, (_, data) => {
+
+      if (!data.fatal) return;
+
+      switch (data.type) {
+
+        case Hls.ErrorTypes.NETWORK_ERROR:
+          console.warn("network error → retry");
+          hls.startLoad();
+          break;
+
+        case Hls.ErrorTypes.MEDIA_ERROR:
+          console.warn("media error → recover");
+          hls.recoverMediaError();
+          break;
+
+        default:
+          console.warn("fatal error → destroy");
+          hls.destroy();
+          hlsRef.current = null;
+          setError("播放失败，请切换线路");
+          break;
+      }
+
+    });
+
+  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+
+    video.src = url;
+
+    video.addEventListener("loadedmetadata", () => {
+      setIsLoading(false);
+      video.play().catch(() => {});
+    }, { once: true });
 
   }
-});
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS (Safari/iOS)
-      video.src = url;
-      video.addEventListener('canplay', () => {
-        markLoaded();
-        video.play().catch(() => {});
-      }, { once: true });
-      video.addEventListener('error', () => {
-        video.src = proxiedUrl;
-        video.addEventListener('canplay', () => {
-          markLoaded();
-          video.play().catch(() => {});
-        }, { once: true });
-        video.addEventListener('error', () => {
-          markError('播放错误');
-        }, { once: true });
-      }, { once: true });
-    } else {
-      // Direct video fallback
-      video.src = url;
-      video.addEventListener('canplay', () => {
-        markLoaded();
-        video.play().catch(() => {});
-      }, { once: true });
-      video.addEventListener('error', () => {
-        video.src = proxiedUrl;
-        video.addEventListener('canplay', () => {
-          markLoaded();
-          video.play().catch(() => {});
-        }, { once: true });
-        video.addEventListener('error', () => {
-          markError('播放错误，请尝试其他频道');
-        }, { once: true });
-      }, { once: true });
-    }
-  }, [channel.httpUserAgent, channel.httpReferrer]);
+
+}, []);
 
   // Load on channel/route change
   useEffect(() => {
