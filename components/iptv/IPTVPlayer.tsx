@@ -14,17 +14,12 @@ import type { M3UChannel } from '@/lib/utils/m3u-parser';
 import type { IPTVSource } from '@/lib/store/iptv-store';
 
 const HLS_LIVE_CONFIG: Partial<Hls['config']> = {
-const HLS_LIVE_CONFIG: Partial<Hls['config']> = {
   enableWorker: true,
-
   lowLatencyMode: false,
-
   maxBufferLength: 90,
   maxMaxBufferLength: 120,
   backBufferLength: 60,
-
   liveSyncDurationCount: 3,
-
   manifestLoadingTimeOut: 20000,
   fragLoadingTimeOut: 30000,
 
